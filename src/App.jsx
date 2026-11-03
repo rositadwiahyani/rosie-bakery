@@ -26,10 +26,19 @@ export default function App() {
       <Navbar page={page} onNavigate={navigate} />
 
       <main className="mx-auto max-w-5xl px-4 pb-28 pt-6 md:px-6 md:pb-12">
-        {page === 'home' && <Home products={store.products} onNavigate={navigate} onFavorite={store.toggleFavorite} />}
-        {page === 'menu' && <Menu {...store} />}
-        {page === 'favorites' && <Favorites products={store.products} onFavorite={store.toggleFavorite} onNavigate={navigate} />}
-        {page === 'profile' && <Profile onReset={store.resetProducts} />}
+        {store.loading && page !== 'profile' ? (
+          <div className="flex flex-col items-center justify-center py-20 text-cocoa/60">
+            <div className="mb-3 h-10 w-10 animate-spin rounded-full border-4 border-orange-200 border-t-crust"></div>
+            <p className="font-bold">Memuat data dari server...</p>
+          </div>
+        ) : (
+          <>
+            {page === 'home' && <Home products={store.products} onNavigate={navigate} onFavorite={store.toggleFavorite} />}
+            {page === 'menu' && <Menu {...store} />}
+            {page === 'favorites' && <Favorites products={store.products} onFavorite={store.toggleFavorite} onNavigate={navigate} />}
+            {page === 'profile' && <Profile onReset={store.resetProducts} />}
+          </>
+        )}
       </main>
     </div>
   )
