@@ -1,12 +1,12 @@
 import { useState, useMemo } from 'react'
-import { Plus, Search, PackageOpen } from 'lucide-react'
+import { Plus, Search } from 'lucide-react'
 import ProductCard from '../components/ProductCard'
 import ProductForm from '../components/ProductForm'
 import ConfirmModal from '../components/ConfirmModal'
 import { CATEGORIES } from '../data/seed'
 
 // Halaman CRUD: Create (Tambah), Read (daftar + cari + filter), Update (Edit), Delete (Hapus)
-export default function Menu({ products, addProduct, updateProduct, deleteProduct, toggleFavorite }) {
+export default function Menu({ products, loading, error, refetch, addProduct, updateProduct, deleteProduct, toggleFavorite, onOpen, onAddToCart, qtyOf }) {
     const [query, setQuery] = useState('')
     const [category, setCategory] = useState('Semua')
     const [formOpen, setFormOpen] = useState(false)
@@ -32,64 +32,93 @@ export default function Menu({ products, addProduct, updateProduct, deleteProduc
     const openCreate = () => { setEditing(null); setFormOpen(true) }
     const openEdit = (p) => { setEditing(p); setFormOpen(true) }
 
-    const handleSubmit = (data) => {
-        if (editing) {
-            updateProduct(editing.id, data)
-            showToast('Roti berhasil diperbarui ✨')
-        } else {
-            addProduct(data)
-            showToast('Roti baru ditambahkan 🥐')
+    // CREATE / UPDATE ke Supabase. Jika gagal, form tetap terbuka agar data tidak hilang.
+    const handleSubmit = async (data) => {
+        try {
+            if (editing) {
+                await updateProduct(editing.id, data)
+                showToast('Perubahan disimpan')
+            } else {
+                await addProduct(data)
+                showToast('Roti baru ditambahkan')
+            }
+            setFormOpen(false)
+            setEditing(null)
+        } catch (err) {
+            showToast(`Gagal menyimpan: ${err.message}`)
         }
-        setFormOpen(false)
-        setEditing(null)
     }
 
-    const confirmDelete = () => {
-        deleteProduct(deleting.id)
+    // DELETE
+    const confirmDelete = async () => {
+        try {
+            await deleteProduct(deleting.id)
+            showToast('Roti dihapus dari menu')
+        } catch (err) {
+            showToast(`Gagal menghapus: ${err.message}`)
+        }
         setDeleting(null)
-        showToast('Roti dihapus dari menu')
     }
 
     return (
-        <div className="space-y-5">
-            <div className="flex items-center justify-between gap-3">
+        <div className="space-y-6">
+            <div className="flex items-end justify-between gap-3 border-b border-line pb-3">
                 <div>
-                    <h1 className="font-display text-3xl font-extrabold">Menu Roti</h1>
-                    <p className="text-sm text-cocoa/60">{products.length} produk tersedia</p>
+                    <p className="hand text-lg text-crust">semua yang ada di etalase</p>
+                    <h1 className="text-4xl">Menu roti</h1>
                 </div>
-                <button onClick={openCreate} className="flex items-center gap-2 rounded-full bg-crust px-5 py-3 font-bold text-white shadow-lg hover:bg-crust-dark">
-                    <Plus size={18} /> <span className="hidden sm:inline">Tambah</span> Roti
+                <button onClick={openCreate} className="btn btn-primary">
+                    <Plus size={18} /> Tambah roti
                 </button>
             </div>
 
+            {error && (
+                <div className="flex items-center justify-between gap-3 border-l-4 border-brick bg-flour px-4 py-3 text-sm">
+                    <span>Tidak bisa terhubung ke server ({error}). Yang tampil adalah data tersimpan terakhir.</span>
+                    <button onClick={refetch} className="btn btn-ghost !px-3 !py-1.5 text-sm">Coba lagi</button>
+                </div>
+            )}
+
             <div className="relative">
-                <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-cocoa/40" />
-                <input
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Cari roti favoritmu..."
-                    className="w-full rounded-full border border-orange-200 bg-white py-3 pl-11 pr-4 outline-none focus:border-crust focus:ring-2 focus:ring-crust/20"
-                />
+                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink/40" />
+                <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cari nama roti" className="input !pl-10" />
             </div>
 
-            <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+            <div className="-mx-4 flex gap-5 overflow-x-auto border-b border-line px-4 md:mx-0 md:px-0">
                 {['Semua', ...CATEGORIES].map((c) => (
-                    <button key={c} onClick={() => setCategory(c)} className={`shrink-0 rounded-full px-4 py-2 text-sm font-bold ${category === c ? 'bg-crust text-white' : 'bg-white text-cocoa/70 ring-1 ring-orange-200'}`}>
+                    <button
+                        key={c}
+                        onClick={() => setCategory(c)}
+                        className={`shrink-0 border-b-2 pb-2 font-bold ${category === c ? 'border-crust text-crust' : 'border-transparent text-ink/55'}`}
+                    >
                         {c}
                     </button>
                 ))}
             </div>
 
-            {filtered.length === 0 ? (
-                <div className="rounded-3xl border-2 border-dashed border-orange-200 py-16 text-center text-cocoa/60">
-                    <PackageOpen className="mx-auto mb-2" size={40} />
-                    <p className="font-bold">Belum ada roti yang cocok.</p>
-                    <p className="text-sm">Coba kata kunci lain atau tambah roti baru.</p>
+            {loading && products.length === 0 ? (
+                <p className="py-14 text-center text-ink/60">Memuat menu dari dapur...</p>
+            ) : filtered.length === 0 ? (
+                <div className="border-2 border-dashed border-line py-14 text-center" style={{ borderRadius: 4 }}>
+                    <p className="text-lg">{products.length === 0 ? 'Menu masih kosong.' : 'Tidak ada roti yang cocok.'}</p>
+                    <p className="text-sm text-ink/60">
+                        {products.length === 0 ? 'Tambahkan roti pertama, atau isi data contoh dari halaman Profil.' : 'Coba kata kunci lain, atau tambahkan roti baru.'}
+                    </p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-x-6 gap-y-10 pt-2 sm:grid-cols-2 lg:grid-cols-3">
                     {filtered.map((p, i) => (
-                        <ProductCard key={p.id} product={p} index={i} onFavorite={toggleFavorite} onEdit={openEdit} onDelete={setDeleting} />
+                        <ProductCard
+                            key={p.id}
+                            product={p}
+                            index={i}
+                            onOpen={onOpen}
+                            onFavorite={toggleFavorite}
+                            onAddToCart={onAddToCart}
+                            inCart={qtyOf(p.id)}
+                            onEdit={openEdit}
+                            onDelete={setDeleting}
+                        />
                     ))}
                 </div>
             )}
@@ -98,7 +127,11 @@ export default function Menu({ products, addProduct, updateProduct, deleteProduc
             {deleting && (
                 <ConfirmModal title={`Hapus "${deleting.name}"?`} message="Roti ini akan dihapus dari menu dan tidak bisa dikembalikan." onConfirm={confirmDelete} onCancel={() => setDeleting(null)} />
             )}
-            {toast && <div className="rise fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-full bg-cocoa px-5 py-3 text-sm font-bold text-white shadow-xl md:bottom-8">{toast}</div>}
+            {toast && (
+                <div className="fade-up fixed bottom-24 left-1/2 z-50 -translate-x-1/2 bg-ink px-5 py-3 text-sm font-bold text-paper md:bottom-8" style={{ borderRadius: 4 }}>
+                    {toast}
+                </div>
+            )}
         </div>
     )
 }

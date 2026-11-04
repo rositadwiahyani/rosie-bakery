@@ -1,25 +1,27 @@
-import { Heart } from 'lucide-react'
 import ProductCard from '../components/ProductCard'
 
-export default function Favorites({ products, onFavorite, onNavigate }) {
+export default function Favorites({ products, onOpen, onFavorite, onAddToCart, qtyOf, onNavigate }) {
     const favs = products.filter((p) => p.favorite)
 
     return (
-        <div className="space-y-5">
-            <div>
-                <h1 className="font-display text-3xl font-extrabold">Roti Favorit</h1>
-                <p className="text-sm text-cocoa/60">{favs.length} roti yang kamu sukai</p>
+        <div className="space-y-6">
+            <div className="border-b border-line pb-3">
+                <p className="hand text-lg text-crust">yang kamu taksir</p>
+                <h1 className="text-4xl">Roti favorit</h1>
+                <p className="text-ink/60">{favs.length} roti yang kamu tandai</p>
             </div>
 
             {favs.length === 0 ? (
-                <div className="rounded-3xl border-2 border-dashed border-orange-200 py-16 text-center text-cocoa/60">
-                    <Heart className="mx-auto mb-2" size={40} />
-                    <p className="font-bold">Belum ada favorit.</p>
-                    <button onClick={() => onNavigate('menu')} className="mt-3 rounded-full bg-crust px-5 py-2.5 text-sm font-bold text-white">Jelajahi menu</button>
+                <div className="border-2 border-dashed border-line py-14 text-center" style={{ borderRadius: 4 }}>
+                    <p className="text-lg">Belum ada yang ditandai.</p>
+                    <p className="mt-1 text-sm text-ink/60">Ketuk ikon hati di menu untuk menyimpan roti kesukaanmu di sini.</p>
+                    <button onClick={() => onNavigate('menu')} className="btn btn-primary mt-5">Buka menu</button>
                 </div>
             ) : (
-                <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-                    {favs.map((p, i) => <ProductCard key={p.id} product={p} index={i} onFavorite={onFavorite} />)}
+                <div className="grid gap-x-6 gap-y-10 pt-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {favs.map((p, i) => (
+                        <ProductCard key={p.id} product={p} index={i} onOpen={onOpen} onFavorite={onFavorite} onAddToCart={onAddToCart} inCart={qtyOf(p.id)} />
+                    ))}
                 </div>
             )}
         </div>

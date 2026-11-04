@@ -1,95 +1,60 @@
 import { apiClient } from '../config/api'
 
-// ---------------------------------------------------------------------------
-// ProductService — CRUD operations ke Supabase (tabel: products)
-//
-// Menggunakan PostgREST API dari Supabase.
-// Tabel products: id, name, category, price, stock, emoji, description,
-//                 favorite, created_at, updated_at
-// ---------------------------------------------------------------------------
+// Service CRUD ke tabel `products` di Supabase (PostgREST)
+const RETURN = { headers: { Prefer: 'return=representation' } }
 
-class ProductService {
-  /**
-   * Ambil semua produk, diurutkan dari terbaru.
-   */
+const normalize = (row) => ({
+  id: row.id,
+  name: row.name,
+  category: row.category,
+  price: Number(row.price),
+  stock: Number(row.stock),
+  emoji: row.emoji || '🥐',
+  image_url: row.image_url || '',
+  description: row.description || '',
+  favorite: Boolean(row.favorite),
+})
+
+const productService = {
+  // READ ALL
   async getProducts() {
-    const data = await apiClient.get('/rest/v1/products?select=*&order=created_at.desc')
-    return {
-      success: true,
-      data: Array.isArray(data) ? data : [],
-    }
-  }
+    const rows = await apiClient.get('/rest/v1/products?select=*&order=created_at.desc')
+    return Array.isArray(rows) ? rows.map(normalize) : []
+  },
 
-  /**
-   * Ambil satu produk berdasarkan ID.
-   */
+  // READ BY ID
   async getProductById(id) {
-    const data = await apiClient.get(`/rest/v1/products?id=eq.${id}&select=*`)
-    if (Array.isArray(data) && data.length > 0) {
-      return { success: true, data: data[0] }
+    const rows = await apiClient.get(`/rest/v1/products?id=eq.${id}&select=*`)
+    if (Array.isArray(rows) && rows.length > 0) {
+      return normalize(rows[0])
     }
     throw new Error('Produk tidak ditemukan.')
-  }
+  },
 
-  /**
-   * Buat produk baru.
-   */
-  async createProduct(product) {
-    const payload = {
-      name: product.name,
-      category: product.category,
-      price: Number(product.price),
-      stock: Number(product.stock),
-      emoji: product.emoji || '🥐',
-      description: product.description || '',
-      favorite: product.favorite || false,
-    }
+  // CREATE
+  async createProduct(payload) {
+    const rows = await apiClient.post('/rest/v1/products', payload, RETURN)
+    const list = Array.isArray(rows) ? rows.map(normalize) : []
+    return list[0] || null
+  },
 
-    const res = await apiClient.post('/rest/v1/products', payload, {
-      headers: { Prefer: 'return=representation' },
-    })
+  // UPDATE
+  async updateProduct(id, payload) {
+    const rows = await apiClient.patch(`/rest/v1/products?id=eq.${id}`, payload, RETURN)
+    return Array.isArray(rows) && rows[0] ? normalize(rows[0]) : null
+  },
 
-    const created = Array.isArray(res) ? res[0] : res
-    return { success: true, data: created }
-  }
-
-  /**
-   * Update produk yang sudah ada.
-   */
-  async updateProduct(id, data) {
-    const payload = { updated_at: new Date().toISOString() }
-
-    if (data.name !== undefined) payload.name = data.name
-    if (data.category !== undefined) payload.category = data.category
-    if (data.price !== undefined) payload.price = Number(data.price)
-    if (data.stock !== undefined) payload.stock = Number(data.stock)
-    if (data.emoji !== undefined) payload.emoji = data.emoji
-    if (data.description !== undefined) payload.description = data.description
-    if (data.favorite !== undefined) payload.favorite = data.favorite
-
-    const res = await apiClient.patch(`/rest/v1/products?id=eq.${id}`, payload, {
-      headers: { Prefer: 'return=representation' },
-    })
-
-    const updated = Array.isArray(res) ? res[0] : res
-    return { success: true, data: updated }
-  }
-
-  /**
-   * Hapus produk.
-   */
+  // DELETE
   async deleteProduct(id) {
     await apiClient.delete(`/rest/v1/products?id=eq.${id}`)
-    return { success: true }
-  }
+    return true
+  },
 
-  /**
-   * Toggle status favorit produk.
-   */
-  async toggleFavorite(id, currentStatus) {
-    return this.updateProduct(id, { favorite: !currentStatus })
-  }
+  // TOGGLE FAVORITE
+  async toggleFavorite(id, newFavoriteStatus) {
+    const rows = await apiClient.patch(`/rest/v1/products?id=eq.${id}`, { favorite: Boolean(newFavoriteStatus) }, RETURN)
+    return Array.isArray(rows) && rows[0] ? normalize(rows[0]) : null
+  },
 }
 
-export default new ProductService()
-
+export default productService

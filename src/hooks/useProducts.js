@@ -45,10 +45,10 @@ export function useProducts() {
             try {
                 setLoading(true)
                 setError(null)
-                const response = await productService.getProducts()
-                if (!cancelled && response.success) {
-                    setProducts(response.data)
-                    saveLocal(response.data)
+                const data = await productService.getProducts()
+                if (!cancelled && Array.isArray(data) && data.length > 0) {
+                    setProducts(data)
+                    saveLocal(data)
                 }
             } catch (err) {
                 console.warn('Supabase tidak tersedia, menggunakan data offline:', err.message)
@@ -72,25 +72,24 @@ export function useProducts() {
 
     // ---- CREATE ----
     const addProduct = useCallback(async (data) => {
-        const optimistic = { ...data, id: crypto.randomUUID(), favorite: false }
-
         try {
-            const response = await productService.createProduct(data)
-            if (response.success && response.data) {
-                setProducts((prev) => [response.data, ...prev])
+            const created = await productService.createProduct(data)
+            if (created) {
+                setProducts((prev) => [created, ...prev])
                 return
             }
         } catch (err) {
             console.warn('Gagal simpan ke Supabase, simpan offline:', err.message)
         }
 
-        // Fallback: simpan ke state + localStorage saja
+        // Fallback offline: simpan ke state + localStorage saja
+        const optimistic = { ...data, id: crypto.randomUUID(), favorite: false }
         setProducts((prev) => [optimistic, ...prev])
     }, [])
 
     // ---- UPDATE ----
     const updateProduct = useCallback(async (id, data) => {
-        // Optimistic update dulu
+        // Optimistic update dulu di UI
         setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...data } : p)))
 
         try {
@@ -102,7 +101,7 @@ export function useProducts() {
 
     // ---- DELETE ----
     const deleteProduct = useCallback(async (id) => {
-        // Optimistic delete dulu
+        // Optimistic delete dulu di UI
         setProducts((prev) => prev.filter((p) => p.id !== id))
 
         try {
@@ -114,31 +113,34 @@ export function useProducts() {
 
     // ---- TOGGLE FAVORITE ----
     const toggleFavorite = useCallback(async (id) => {
-        let currentFav = false
+        const currentItem = products.find((p) => p.id === id)
+        if (!currentItem) return
+
+        const nextStatus = !currentItem.favorite
+
+        // Optimistic update di UI & localStorage
         setProducts((prev) =>
-            prev.map((p) => {
-                if (p.id === id) {
-                    currentFav = p.favorite
-                    return { ...p, favorite: !p.favorite }
-                }
-                return p
-            }),
+            prev.map((p) => (p.id === id ? { ...p, favorite: nextStatus } : p)),
         )
 
         try {
-            await productService.toggleFavorite(id, currentFav)
+            await productService.toggleFavorite(id, nextStatus)
         } catch (err) {
             console.warn('Gagal toggle favorit di Supabase:', err.message)
+            // Rollback jika request ke Supabase gagal
+            setProducts((prev) =>
+                prev.map((p) => (p.id === id ? { ...p, favorite: !nextStatus } : p)),
+            )
         }
-    }, [])
+    }, [products])
 
     // ---- RESET: refetch dari Supabase atau kembali ke seed ----
     const resetProducts = useCallback(async () => {
         try {
-            const response = await productService.getProducts()
-            if (response.success) {
-                setProducts(response.data)
-                saveLocal(response.data)
+            const data = await productService.getProducts()
+            if (Array.isArray(data) && data.length > 0) {
+                setProducts(data)
+                saveLocal(data)
                 return
             }
         } catch {
@@ -148,5 +150,5 @@ export function useProducts() {
         saveLocal(seedProducts)
     }, [])
 
-    return { products, loading, error, addProduct, updateProduct, deleteProduct, toggleFavorite, resetProducts }
+    return { products, loading, error, addProduct, updateProduct, deleteProduct, toggleFavorite, resetProducts, seedData: resetProducts }
 }

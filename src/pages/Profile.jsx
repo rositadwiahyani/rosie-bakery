@@ -1,4 +1,5 @@
-import { GraduationCap, IdCard, Users, RotateCcw } from 'lucide-react'
+import { useState } from 'react'
+import { Database, Play } from 'lucide-react'
 
 const PROFILE = {
     nama: 'Rosita Dwi Ahyani',
@@ -6,49 +7,51 @@ const PROFILE = {
     kelompok: '37',
 }
 
-export default function Profile({ onReset }) {
+export default function Profile({ onSeed, onReplaySplash }) {
+    const [busy, setBusy] = useState(false)
+    const [msg, setMsg] = useState('')
+
+    const handleSeed = async () => {
+        if (!confirm('Tambahkan 8 data contoh ke database Supabase?')) return
+        setBusy(true)
+        try {
+            await onSeed()
+            setMsg('Data contoh berhasil ditambahkan.')
+        } catch (err) {
+            setMsg(`Gagal: ${err.message}`)
+        }
+        setBusy(false)
+    }
+
     const rows = [
-        { icon: GraduationCap, label: 'Nama', value: PROFILE.nama },
-        { icon: IdCard, label: 'NIM', value: PROFILE.nim },
-        { icon: Users, label: 'Kelompok', value: PROFILE.kelompok },
+        ['Nama', PROFILE.nama],
+        ['NIM', PROFILE.nim],
+        ['Kelompok', PROFILE.kelompok],
     ]
 
     return (
-        <div className="mx-auto max-w-md space-y-6">
-            <section className="rise overflow-hidden rounded-[2rem] bg-white shadow-sm ring-1 ring-orange-200/70">
-                <div className="relative h-28 bg-gradient-to-br from-crust to-amber-500">
-                    <span aria-hidden className="absolute right-4 top-2 text-6xl opacity-80">🍞</span>
-                </div>
-                <div className="-mt-12 px-6 pb-6 text-center">
-                    <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full border-4 border-white bg-butter font-display text-4xl font-extrabold text-crust shadow">
-                        RD
+        <div className="mx-auto max-w-xl space-y-10">
+            <section className="fade-up relative">
+                <span className="tape -top-3 left-8 rotate-[-4deg]" />
+                <div className="border-2 border-ink bg-flour shadow-[6px_6px_0_#d8b98a]" style={{ borderRadius: 4 }}>
+                    <div className="flex items-center gap-4 border-b-2 border-ink bg-crust p-5 text-paper">
+                        <div className="font-display flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 border-paper text-2xl">RD</div>
+                        <div>
+                            <p className="hand text-lg leading-none text-kraft">yang punya dapur</p>
+                            <h1 className="text-2xl leading-tight">{PROFILE.nama}</h1>
+                            <p className="text-paper/80">Pemilik Rosie Bakery</p>
+                        </div>
                     </div>
-                    <h1 className="font-display mt-3 text-2xl font-extrabold">{PROFILE.nama}</h1>
-                    <p className="text-sm font-semibold text-crust">Pemilik Rosie Bakery</p>
 
-                    <dl className="mt-6 space-y-3 text-left">
-                        {rows.map(({ icon: Icon, label, value }) => (
-                            <div key={label} className="flex items-center gap-4 rounded-2xl bg-cream p-4">
-                                <span className="rounded-xl bg-white p-2.5 text-crust shadow-sm"><Icon size={20} /></span>
-                                <div>
-                                    <dt className="text-xs font-bold uppercase tracking-wide text-cocoa/50">{label}</dt>
-                                    <dd className="font-bold">{value}</dd>
-                                </div>
+                    <dl className="divide-y divide-line">
+                        {rows.map(([label, value]) => (
+                            <div key={label} className="flex items-baseline justify-between gap-4 px-5 py-4">
+                                <dt className="label !mb-0">{label}</dt>
+                                <dd className="text-lg font-bold">{value}</dd>
                             </div>
                         ))}
                     </dl>
                 </div>
-            </section>
-
-            <section className="rounded-3xl bg-white p-5 text-sm ring-1 ring-orange-200/70">
-                <h2 className="font-display mb-1 text-lg font-extrabold">Tentang Aplikasi</h2>
-                <p className="text-cocoa/70">Rosie Bakery adalah Progressive Web App (React + Vite) yang dapat di-install dan berjalan offline. Praktikum PPB - Modul 5 PWA.</p>
-                <button
-                    onClick={() => { if (confirm('Kembalikan menu ke data awal?')) onReset() }}
-                    className="mt-4 flex items-center gap-2 rounded-xl bg-orange-100 px-4 py-2.5 font-bold text-crust-dark hover:bg-orange-200"
-                >
-                    <RotateCcw size={16} /> Reset data menu
-                </button>
             </section>
         </div>
     )

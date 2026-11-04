@@ -15,7 +15,7 @@ export default defineConfig({
         short_name: 'Rosie Bakery',
         description: 'Toko roti hangat dengan cinta - kelola menu roti favoritmu.',
         theme_color: '#b4532a',
-        background_color: '#fff7ed',
+        background_color: '#b4532a',
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/',
@@ -27,9 +27,20 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,jpg,jpeg,webp,ico,woff2}'],
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         navigateFallback: '/index.html',
         runtimeCaching: [
+          {
+            // Foto roti dari Supabase Storage / URL luar: tampil lagi saat offline
+            urlPattern: ({ request }) => request.destination === 'image',
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'rosie-images',
+              expiration: { maxEntries: 80, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: 'StaleWhileRevalidate',
@@ -42,17 +53,6 @@ export default defineConfig({
               cacheName: 'google-fonts-files',
               expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 },
               cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-          {
-            // Cache Supabase API responses agar bisa diakses offline
-            urlPattern: /^https:\/\/.*\.supabase\.co\/rest\/v1\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'supabase-api-cache',
-              expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 },
-              cacheableResponse: { statuses: [0, 200] },
-              networkTimeoutSeconds: 5,
             },
           },
         ],

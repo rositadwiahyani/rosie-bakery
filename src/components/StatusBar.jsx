@@ -5,14 +5,14 @@ export default function StatusBar({ online, canInstall, onInstall }) {
     return (
         <>
             {!online && (
-                <div className="flex items-center justify-center gap-2 bg-cocoa px-4 py-2 text-sm font-bold text-butter">
-                    <WifiOff size={16} /> Kamu sedang offline - data tetap tersimpan di perangkat.
+                <div className="flex items-center justify-center gap-2 bg-ink px-4 py-2 text-sm text-paper">
+                    <WifiOff size={15} /> Kamu sedang offline. Menu tetap bisa dilihat, tapi checkout butuh internet.
                 </div>
             )}
             {canInstall && (
-                <div className="flex items-center justify-between gap-3 bg-butter px-4 py-2 text-sm font-bold text-cocoa">
-                    <span>Pasang Rosie Bakery di perangkatmu 🥐</span>
-                    <button onClick={onInstall} className="flex items-center gap-1.5 rounded-full bg-crust px-3 py-1.5 text-white">
+                <div className="flex items-center justify-between gap-3 border-b border-line bg-flour px-4 py-2 text-sm">
+                    <span>Pasang Rosie Bakery di perangkatmu supaya bisa dibuka seperti aplikasi biasa.</span>
+                    <button onClick={onInstall} className="btn btn-primary !px-3 !py-1.5 text-sm">
                         <Download size={14} /> Install
                     </button>
                 </div>
