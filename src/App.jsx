@@ -8,6 +8,7 @@ import Favorites from './pages/Favorites'
 import ProductDetail from './pages/ProductDetail'
 import Cart from './pages/Cart'
 import Profile from './pages/Profile'
+import Footer from './components/Footer'
 import { useProducts } from './hooks/useProducts'
 import { useCart } from './hooks/useCart'
 import { useOnlineStatus } from './hooks/useOnlineStatus'
@@ -43,12 +44,12 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="flex min-h-screen flex-col">
       {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
       <StatusBar online={online} canInstall={canInstall} onInstall={install} />
       <Navbar page={page} onNavigate={navigate} cartCount={cart.count} />
 
-      <main className="mx-auto max-w-6xl px-4 pb-28 pt-8 md:px-6 md:pb-14">
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-20 pt-8 md:px-6 md:pb-14">
         {page === 'home' && <Home products={store.products} onNavigate={navigate} onFavorite={store.toggleFavorite} {...common} />}
         {page === 'menu' && <Menu {...store} {...common} />}
         {page === 'favorites' && <Favorites products={store.products} onFavorite={store.toggleFavorite} onNavigate={navigate} {...common} />}
@@ -76,6 +77,8 @@ export default function App() {
         )}
         {page === 'profile' && <Profile onSeed={store.seedData} onReplaySplash={() => setShowSplash(true)} />}
       </main>
+
+      <Footer />
     </div>
   )
 }
