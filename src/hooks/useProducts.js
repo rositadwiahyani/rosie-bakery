@@ -111,26 +111,40 @@ export function useProducts() {
         }
     }, [])
 
-    // ---- TOGGLE FAVORITE ----
+    // ---- TOGGLE FAVORITE (Dimodifikasi untuk Sync Offline) ----
     const toggleFavorite = useCallback(async (id) => {
         const currentItem = products.find((p) => p.id === id)
         if (!currentItem) return
 
         const nextStatus = !currentItem.favorite
 
-        // Optimistic update di UI & localStorage
+        // 1. Optimistic update di UI & localStorage
         setProducts((prev) =>
             prev.map((p) => (p.id === id ? { ...p, favorite: nextStatus } : p)),
         )
 
+        // 2. Jika koneksi terputus (Offline), masukkan ke antrean
+        if (!navigator.onLine) {
+            const pendingFavorites = JSON.parse(localStorage.getItem('pendingFavorites') || '[]')
+
+            if (pendingFavorites.includes(id)) {
+                // Jika sudah ada, hapus (berarti user batal favorit saat offline)
+                const newQueue = pendingFavorites.filter(favId => favId !== id)
+                localStorage.setItem('pendingFavorites', JSON.stringify(newQueue))
+            } else {
+                // Jika belum ada, masukkan ke antrean
+                pendingFavorites.push(id)
+                localStorage.setItem('pendingFavorites', JSON.stringify(pendingFavorites))
+            }
+            return // Berhenti di sini, tidak perlu panggil API
+        }
+
+        // 3. Jika koneksi lancar, tembak ke Supabase
         try {
             await productService.toggleFavorite(id, nextStatus)
         } catch (err) {
             console.warn('Gagal toggle favorit di Supabase:', err.message)
-            // Rollback jika request ke Supabase gagal
-            setProducts((prev) =>
-                prev.map((p) => (p.id === id ? { ...p, favorite: !nextStatus } : p)),
-            )
+            // Rollback dihapus agar ketika error jaringan, UI tetap terasa responsif
         }
     }, [products])
 

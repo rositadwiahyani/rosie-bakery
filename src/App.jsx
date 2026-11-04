@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Navbar from './components/Navbar'
 import SplashScreen from './components/SplashScreen'
 import StatusBar from './components/StatusBar'
@@ -24,6 +24,34 @@ export default function App() {
   const cart = useCart(store.products)
   const online = useOnlineStatus()
   const { canInstall, install } = useInstallPrompt()
+
+  // --- TAMBAHAN KODE: Sinkronisasi Data Offline ke Database ---
+  useEffect(() => {
+    const syncOfflineData = async () => {
+      // Jika internet kembali online
+      if (online) {
+        // Ambil data antrean favorit dari Local Storage
+        const pendingFavorites = JSON.parse(localStorage.getItem('pendingFavorites') || '[]')
+
+        if (pendingFavorites.length > 0) {
+          try {
+            // Lakukan sinkronisasi satu per satu
+            for (const id of pendingFavorites) {
+              await store.toggleFavorite(id)
+            }
+            // Bersihkan antrean jika berhasil semua
+            localStorage.removeItem('pendingFavorites')
+            console.log('Sinkronisasi data offline berhasil!')
+          } catch (error) {
+            console.error('Gagal sinkronisasi data', error)
+          }
+        }
+      }
+    }
+
+    syncOfflineData()
+  }, [online]) // Akan dijalankan ulang setiap kali variabel 'online' berubah
+  // ------------------------------------------------------------
 
   const navigate = (id) => {
     setPage(id)
