@@ -21,37 +21,17 @@ export default function App() {
   const [productId, setProductId] = useState(null)
 
   const store = useProducts()
+  const { triggerSync } = store
   const cart = useCart(store.products)
   const online = useOnlineStatus()
   const { canInstall, install } = useInstallPrompt()
 
-  // --- TAMBAHAN KODE: Sinkronisasi Data Offline ke Database ---
+  // Sinkronisasi otomatis ke Supabase saat koneksi internet kembali online
   useEffect(() => {
-    const syncOfflineData = async () => {
-      // Jika internet kembali online
-      if (online) {
-        // Ambil data antrean favorit dari Local Storage
-        const pendingFavorites = JSON.parse(localStorage.getItem('pendingFavorites') || '[]')
-
-        if (pendingFavorites.length > 0) {
-          try {
-            // Lakukan sinkronisasi satu per satu
-            for (const id of pendingFavorites) {
-              await store.toggleFavorite(id)
-            }
-            // Bersihkan antrean jika berhasil semua
-            localStorage.removeItem('pendingFavorites')
-            console.log('Sinkronisasi data offline berhasil!')
-          } catch (error) {
-            console.error('Gagal sinkronisasi data', error)
-          }
-        }
-      }
+    if (online) {
+      triggerSync()
     }
-
-    syncOfflineData()
-  }, [online]) // Akan dijalankan ulang setiap kali variabel 'online' berubah
-  // ------------------------------------------------------------
+  }, [online, triggerSync])
 
   const navigate = (id) => {
     setPage(id)
@@ -74,7 +54,14 @@ export default function App() {
   return (
     <div className="flex min-h-screen flex-col">
       {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
-      <StatusBar online={online} canInstall={canInstall} onInstall={install} />
+      <StatusBar
+        online={online}
+        canInstall={canInstall}
+        onInstall={install}
+        syncStatus={store.syncStatus}
+        pendingCount={store.pendingCount}
+        onRetrySync={store.triggerSync}
+      />
       <Navbar page={page} onNavigate={navigate} cartCount={cart.count} />
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-20 pt-8 md:px-6 md:pb-14">

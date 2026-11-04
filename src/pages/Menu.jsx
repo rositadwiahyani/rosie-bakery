@@ -32,15 +32,15 @@ export default function Menu({ products, loading, error, refetch, addProduct, up
     const openCreate = () => { setEditing(null); setFormOpen(true) }
     const openEdit = (p) => { setEditing(p); setFormOpen(true) }
 
-    // CREATE / UPDATE ke Supabase. Jika gagal, form tetap terbuka agar data tidak hilang.
+    // CREATE / UPDATE: Disimpan lokal seketika & dimasukkan ke antrean sinkronisasi
     const handleSubmit = async (data) => {
         try {
             if (editing) {
                 await updateProduct(editing.id, data)
-                showToast('Perubahan disimpan')
+                showToast(navigator.onLine ? 'Perubahan disimpan' : 'Perubahan disimpan lokal (menunggu sinkronisasi)')
             } else {
                 await addProduct(data)
-                showToast('Roti baru ditambahkan')
+                showToast(navigator.onLine ? 'Roti baru ditambahkan' : 'Roti baru disimpan lokal (menunggu sinkronisasi)')
             }
             setFormOpen(false)
             setEditing(null)
@@ -49,11 +49,11 @@ export default function Menu({ products, loading, error, refetch, addProduct, up
         }
     }
 
-    // DELETE
+    // DELETE: Dihapus lokal seketika & dimasukkan ke antrean sinkronisasi
     const confirmDelete = async () => {
         try {
             await deleteProduct(deleting.id)
-            showToast('Roti dihapus dari menu')
+            showToast(navigator.onLine ? 'Roti dihapus dari menu' : 'Roti dihapus lokal (menunggu sinkronisasi)')
         } catch (err) {
             showToast(`Gagal menghapus: ${err.message}`)
         }

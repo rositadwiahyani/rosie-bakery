@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { seedProducts } from '../data/seed'
 import productService from '../services/productService'
+import * as syncService from '../services/syncService'
 
 const STORAGE_KEY = 'rosie-bakery:products'
 
@@ -26,29 +27,75 @@ function saveLocal(products) {
 }
 
 // ---------------------------------------------------------------------------
-// Custom hook CRUD produk.
-//
-// Strategi: Online-first, localStorage fallback.
-// - Saat ONLINE  → CRUD langsung ke Supabase, lalu cache ke localStorage
-// - Saat OFFLINE → CRUD ke localStorage agar app tetap berfungsi
+// Custom hook CRUD produk — Offline-First Architecture
 // ---------------------------------------------------------------------------
 export function useProducts() {
     const [products, setProducts] = useState(loadLocal)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
+    const [syncStatus, setSyncStatus] = useState(() => (syncService.getQueue().length > 0 ? 'pending' : 'synced'))
+    const [pendingCount, setPendingCount] = useState(() => syncService.getQueue().length)
 
-    // ---- Fetch awal dari Supabase, fallback ke localStorage ----
+    // Referensi untuk products terbaru agar aman dipanggil di callbacks
+    const productsRef = useRef(products)
+    useEffect(() => {
+        productsRef.current = products
+        saveLocal(products)
+    }, [products])
+
+    // Callback ketika produk baru yang dibuat offline berhasil terdaftar di server
+    const handleProductCreated = useCallback((oldTempId, createdProduct) => {
+        setProducts((prev) => {
+            const updated = prev.map((p) => (String(p.id) === String(oldTempId) ? createdProduct : p))
+            saveLocal(updated)
+            return updated
+        })
+    }, [])
+
+    // Fungsi sinkronisasi otomatis antrean
+    const triggerSync = useCallback(async () => {
+        if (!navigator.onLine) {
+            const queueLen = syncService.getQueue().length
+            setPendingCount(queueLen)
+            setSyncStatus(queueLen > 0 ? 'pending' : 'synced')
+            return
+        }
+
+        await syncService.processSyncQueue({
+            onProductCreated: handleProductCreated,
+            onStatusChange: (status, count) => {
+                setSyncStatus(status)
+                setPendingCount(count)
+            },
+        })
+    }, [handleProductCreated])
+
+    // Fetch awal dari Supabase
     useEffect(() => {
         let cancelled = false
 
         async function fetchFromSupabase() {
+            const queue = syncService.getQueue()
+            const hasPending = queue.length > 0
+
+            // Jika ada antrean pending, prioritaskan sync terlebih dahulu
+            if (hasPending && navigator.onLine) {
+                await triggerSync()
+            }
+
             try {
                 setLoading(true)
                 setError(null)
                 const data = await productService.getProducts()
                 if (!cancelled && Array.isArray(data) && data.length > 0) {
-                    setProducts(data)
-                    saveLocal(data)
+                    // Cek lagi apakah ada pending items lokal agar tidak tertimpa
+                    const currentQueue = syncService.getQueue()
+                    if (currentQueue.length === 0) {
+                        setProducts(data)
+                        saveLocal(data)
+                        setSyncStatus('synced')
+                        setPendingCount(0)
+                    }
                 }
             } catch (err) {
                 console.warn('Supabase tidak tersedia, menggunakan data offline:', err.message)
@@ -62,99 +109,126 @@ export function useProducts() {
         }
 
         fetchFromSupabase()
-        return () => { cancelled = true }
-    }, [])
 
-    // ---- Simpan ke localStorage setiap kali products berubah ----
-    useEffect(() => {
-        saveLocal(products)
-    }, [products])
+        // Pemicu otomatis sinkronisasi saat internet kembali online
+        const handleOnline = () => {
+            triggerSync()
+        }
+        const handleOffline = () => {
+            const count = syncService.getQueue().length
+            setSyncStatus(count > 0 ? 'pending' : 'synced')
+            setPendingCount(count)
+        }
 
-    // ---- CREATE ----
+        window.addEventListener('online', handleOnline)
+        window.addEventListener('offline', handleOffline)
+
+        return () => {
+            cancelled = true
+            window.removeEventListener('online', handleOnline)
+            window.removeEventListener('offline', handleOffline)
+        }
+    }, [triggerSync])
+
+    // ---- CREATE (Offline-First) ----
     const addProduct = useCallback(async (data) => {
-        try {
-            const created = await productService.createProduct(data)
-            if (created) {
-                setProducts((prev) => [created, ...prev])
-                return
-            }
-        } catch (err) {
-            console.warn('Gagal simpan ke Supabase, simpan offline:', err.message)
-        }
+        const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+        const optimistic = { ...data, id: tempId, favorite: false }
 
-        // Fallback offline: simpan ke state + localStorage saja
-        const optimistic = { ...data, id: crypto.randomUUID(), favorite: false }
+        // 1. Simpan instan di state & localStorage
         setProducts((prev) => [optimistic, ...prev])
-    }, [])
 
-    // ---- UPDATE ----
+        // 2. Masukkan ke antrean sinkronisasi
+        const queue = syncService.addToQueue({
+            type: 'CREATE',
+            productId: tempId,
+            payload: optimistic,
+        })
+        setPendingCount(queue.length)
+        setSyncStatus(navigator.onLine ? 'syncing' : 'pending')
+
+        // 3. Picu pengiriman jika online
+        if (navigator.onLine) {
+            triggerSync()
+        }
+    }, [triggerSync])
+
+    // ---- UPDATE (Offline-First) ----
     const updateProduct = useCallback(async (id, data) => {
-        // Optimistic update dulu di UI
-        setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...data } : p)))
+        // 1. Optimistic update di UI
+        setProducts((prev) => prev.map((p) => (String(p.id) === String(id) ? { ...p, ...data } : p)))
 
-        try {
-            await productService.updateProduct(id, data)
-        } catch (err) {
-            console.warn('Gagal update ke Supabase, perubahan tersimpan offline:', err.message)
+        // 2. Masukkan ke antrean sinkronisasi
+        const queue = syncService.addToQueue({
+            type: 'UPDATE',
+            productId: id,
+            payload: data,
+        })
+        setPendingCount(queue.length)
+        setSyncStatus(navigator.onLine ? 'syncing' : 'pending')
+
+        // 3. Picu pengiriman jika online
+        if (navigator.onLine) {
+            triggerSync()
         }
-    }, [])
+    }, [triggerSync])
 
-    // ---- DELETE ----
+    // ---- DELETE (Offline-First) ----
     const deleteProduct = useCallback(async (id) => {
-        // Optimistic delete dulu di UI
-        setProducts((prev) => prev.filter((p) => p.id !== id))
+        // 1. Optimistic delete di UI
+        setProducts((prev) => prev.filter((p) => String(p.id) !== String(id)))
 
-        try {
-            await productService.deleteProduct(id)
-        } catch (err) {
-            console.warn('Gagal hapus di Supabase, dihapus dari offline:', err.message)
+        // 2. Masukkan ke antrean sinkronisasi
+        const queue = syncService.addToQueue({
+            type: 'DELETE',
+            productId: id,
+        })
+        setPendingCount(queue.length)
+        setSyncStatus(navigator.onLine ? 'syncing' : 'pending')
+
+        // 3. Picu pengiriman jika online
+        if (navigator.onLine) {
+            triggerSync()
         }
-    }, [])
+    }, [triggerSync])
 
-    // ---- TOGGLE FAVORITE (Dimodifikasi untuk Sync Offline) ----
+    // ---- TOGGLE FAVORITE (Offline-First & Idempotent) ----
     const toggleFavorite = useCallback(async (id) => {
-        const currentItem = products.find((p) => p.id === id)
+        const currentItem = productsRef.current.find((p) => String(p.id) === String(id))
         if (!currentItem) return
 
         const nextStatus = !currentItem.favorite
 
-        // 1. Optimistic update di UI & localStorage
+        // 1. Optimistic update langsung di etalase
         setProducts((prev) =>
-            prev.map((p) => (p.id === id ? { ...p, favorite: nextStatus } : p)),
+            prev.map((p) => (String(p.id) === String(id) ? { ...p, favorite: nextStatus } : p)),
         )
 
-        // 2. Jika koneksi terputus (Offline), masukkan ke antrean
-        if (!navigator.onLine) {
-            const pendingFavorites = JSON.parse(localStorage.getItem('pendingFavorites') || '[]')
+        // 2. Catat ke antrean sinkronisasi dengan nilai eksplisit
+        const queue = syncService.addToQueue({
+            type: 'SET_FAVORITE',
+            productId: id,
+            payload: { favorite: nextStatus },
+        })
+        setPendingCount(queue.length)
+        setSyncStatus(navigator.onLine ? 'syncing' : 'pending')
 
-            if (pendingFavorites.includes(id)) {
-                // Jika sudah ada, hapus (berarti user batal favorit saat offline)
-                const newQueue = pendingFavorites.filter(favId => favId !== id)
-                localStorage.setItem('pendingFavorites', JSON.stringify(newQueue))
-            } else {
-                // Jika belum ada, masukkan ke antrean
-                pendingFavorites.push(id)
-                localStorage.setItem('pendingFavorites', JSON.stringify(pendingFavorites))
-            }
-            return // Berhenti di sini, tidak perlu panggil API
+        // 3. Picu pengiriman jika online
+        if (navigator.onLine) {
+            triggerSync()
         }
+    }, [triggerSync])
 
-        // 3. Jika koneksi lancar, tembak ke Supabase
-        try {
-            await productService.toggleFavorite(id, nextStatus)
-        } catch (err) {
-            console.warn('Gagal toggle favorit di Supabase:', err.message)
-            // Rollback dihapus agar ketika error jaringan, UI tetap terasa responsif
-        }
-    }, [products])
-
-    // ---- RESET: refetch dari Supabase atau kembali ke seed ----
+    // ---- RESET: Refetch dari Supabase atau kembali ke seed ----
     const resetProducts = useCallback(async () => {
         try {
             const data = await productService.getProducts()
             if (Array.isArray(data) && data.length > 0) {
                 setProducts(data)
                 saveLocal(data)
+                syncService.clearQueue()
+                setPendingCount(0)
+                setSyncStatus('synced')
                 return
             }
         } catch {
@@ -162,7 +236,23 @@ export function useProducts() {
         }
         setProducts(seedProducts)
         saveLocal(seedProducts)
+        syncService.clearQueue()
+        setPendingCount(0)
+        setSyncStatus('synced')
     }, [])
 
-    return { products, loading, error, addProduct, updateProduct, deleteProduct, toggleFavorite, resetProducts, seedData: resetProducts }
+    return {
+        products,
+        loading,
+        error,
+        syncStatus,
+        pendingCount,
+        triggerSync,
+        addProduct,
+        updateProduct,
+        deleteProduct,
+        toggleFavorite,
+        resetProducts,
+        seedData: resetProducts,
+    }
 }
