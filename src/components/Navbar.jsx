@@ -45,9 +45,8 @@ export default function Navbar({ page, onNavigate, cartCount }) {
             </header>
 
             {/* Mobile: judul + navigasi bawah */}
-            <header className="flex items-baseline justify-between border-b border-line px-4 py-3 md:hidden">
+            <header className="flex items-center justify-center border-b border-line px-4 py-3 md:hidden">
                 <span className="font-display text-xl text-crust">Rosie Bakery</span>
-                <span className="hand text-sm text-ink/55">roti hangat sejak pagi</span>
             </header>
             <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-paper pb-[env(safe-area-inset-bottom)] md:hidden">
                 <div className="grid grid-cols-5">

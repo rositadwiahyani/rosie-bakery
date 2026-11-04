@@ -2,8 +2,6 @@ import { Heart, Plus } from 'lucide-react'
 import { rupiah } from '../utils'
 import ProductImage from './ProductImage'
 
-// Kartu katalog. Foto + judul bisa diklik untuk membuka detail.
-// onEdit / onDelete hanya dikirim dari halaman Menu (mode kelola).
 export default function ProductCard({ product, index = 0, onOpen, onFavorite, onAddToCart, onEdit, onDelete, inCart = 0 }) {
     const { name, category, price, stock, description, favorite } = product
     const soldOut = stock <= 0

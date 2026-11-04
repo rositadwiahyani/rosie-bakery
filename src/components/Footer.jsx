@@ -2,7 +2,8 @@ export default function Footer() {
     const year = new Date().getFullYear()
 
     return (
-        <footer className="mt-auto border-t border-line bg-flour/60 py-10 text-center text-sm text-ink/70 pb-28 md:pb-10">
+        // Tambahkan class "hidden md:block" di awal className
+        <footer className="hidden md:block mt-auto border-t border-line bg-flour/60 pt-10 text-center text-sm text-ink/70 pb-4">
             <div className="mx-auto max-w-6xl px-4 space-y-3">
                 <div className="flex items-center justify-center gap-2">
                     <span className="font-display text-xl text-crust">Rosie Bakery</span>
@@ -21,4 +22,3 @@ export default function Footer() {
         </footer>
     )
 }
-
